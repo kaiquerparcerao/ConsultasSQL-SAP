@@ -1,0 +1,435 @@
+--- Os valores negativos tratam-se das notas de devoluções de vendas lançadas na tela DEVOLUÇÃO DE NOTA FISCAL DE SAÍDA
+
+----- NOTA FISCAL DE SAÍDA
+
+SELECT  
+T0.[DocEntry], 
+(CASE WHEN T1.[BPLID] ='1' THEN 'MATRIZ' ELSE 'FILIAL' END) AS 'Matriz/Filial', 
+T0.[Whscode],
+T1.[Serial] AS 'DANFE',  
+T10.[usage] as 'Utilização',
+T1.[DocDate] AS 'Data Emissão',  
+T0.[BaseCard], 
+T12.[CardName] AS 'Razão social', 
+T12.[CardFName] AS 'Cliente', 
+T13.[IndName] AS 'Nome do Segmento',
+T13.[IndDesc] AS 'Descrição do Segmento',
+T4.[SWW] as 'Família de Prod. (Item)',
+T4.[U_Segment_Code] as 'Seg. Code (Item)',
+T0.itemcode, 
+T0.[SubCatNum] as 'Cód. Item Cliente', 
+T4.[ITEMNAME] AS 'Descrição do item', 
+T0.[Quantity] AS 'Quantidade', 
+T0.[Currency] AS 'Moeda', 
+
+
+IIF (T1.DocDate <= '31/10/2021',
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+     IIF (T10.[ID]  = 15, 0, T0.[PriceBefDi]*T7.[U_Multiplicador] ),
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+     IIF (T10.[ID]  = 15, 0, T0.[PriceBefDi]*T7.[U_MultiplicadorNovo] )
+) AS 'Preço NET', 
+
+
+CASE WHEN 
+( format((CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END), '#.') ) = 0 
+THEN ' ' 
+ELSE format(((CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100), 'P','pt-br') END  AS '% Desconto',
+
+
+IIF (T1.DocDate <= '31/10/2021',
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+     IIF (T10.[ID]  = 15,
+          0, 
+          (T0.[PriceBefDi]*T7.[U_Multiplicador] ) * ( 1- (  (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100  ) ) 
+          ),
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+     IIF (T10.[ID]  = 15,
+          0, 
+          (T0.[PriceBefDi]*T7.[U_MultiplicadorNovo] ) * ( 1- (  (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100  ) ) 
+          )
+) AS 'Preço NET após desconto', 
+
+
+IIF (T1.DocDate <= '31/10/2021', 
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+     FORMAT (T7.[U_Multiplicador], 'G', 'de-de'), 
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+     FORMAT (T7.[U_MultiplicadorNovo], 'G', 'de-de')
+) as 'Multiplicador',
+
+
+IIF (T10.[ID]  = 15, 0, 
+T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) 
+) AS 'Preço c/ IMP - Ex-IPI', --- preço unitário considerando desconto
+
+
+IIF (T10.[ID]  = 15, FORMAT (0.00, 'G', 'de-de'), FORMAT (T0.[Rate], 'G', 'de-de') ) AS 'Taxa', --- Campo taxa da linha do item
+
+
+IIF (T10.[ID]  = 15, 0, 
+   CASE WHEN T0.Currency = 'R$' 
+   THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) 
+   ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) END 
+) as 'R$ Preço c/ IMP - Ex-IPI', --- Preço unitário em reais, considerando desconto.  
+
+
+IIF (T10.[ID]  = 15, 0, 
+   ( 
+      CASE WHEN T0.Currency = 'R$' 
+      THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) 
+      ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) END 
+   ) * T0.[Quantity] 
+) AS 'R$ Total por Item - Ex-IPI',
+
+
+
+IIF (T10.[ID]  = 15, T0.[VatSumSy], 
+   ( 
+      CASE WHEN T0.Currency = 'R$' 
+      THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) 
+      ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) END 
+   ) * T0.[Quantity] + T0.[VatSumSy]
+) AS 'R$ Total por Item - Ex. frete', 
+
+
+(
+  ISNULL ((T11.[LineTotal] + T11.[VatSum]), 0.00) / 
+
+  ISNULL (( SELECT Sum(INV1.[Quantity]) From INV1 Where   INV1.[DOCENTRY] = T0.[DOCENTRY] ) , 0.00)
+
+) * T0.[Quantity] as 'R$ Frete incluso na NF',
+
+
+((T0.[PriceBefDi] * T0.[Rate]) * T0.[Quantity])  *  ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00))  <>  0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) as 'R$ Desconto',
+
+
+IIF (T10.[ID]  = 15, 0, T0.Stockprice ) as 'R$ Custo',
+
+
+
+-- Se na coluna "Margem" retornar 999, o código de imposto não foi incluído na tabela definida pelo usuario @MPOL_COD_IMP_MULTI para incluir ir em Ferramentas -> Janelas definidas pelo usuario -> MPOL_COD_IMP_MULTI
+IIF (T1.DocDate <='31/10/2021',
+
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+(CASE WHEN ( T0.[Price] = 0) or (T10.[ID]  = 15) THEN 0 ELSE
+      CASE WHEN T0.[Taxcode] = T7.[Code] 
+      THEN (
+                  (CASE WHEN T0.Currency = 'R$' 
+                  THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) *T7.[U_Multiplicador] 
+                  ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_Multiplicador] END) 
+                     - (T0.[Stockprice])
+                ) 
+                                                     / (CASE WHEN  T0.Currency = 'R$' 
+                                                     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_Multiplicador] 
+                                                     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_Multiplicador]
+                                                     END) 
+      ELSE '999' END
+END),
+
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+(CASE WHEN ( T0.[Price] = 0) or (T10.[ID]  = 15) THEN 0 ELSE
+      CASE WHEN T0.[Taxcode] = T7.[Code] 
+      THEN (
+                  (CASE WHEN T0.Currency = 'R$' 
+                  THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) *T7.[U_MultiplicadorNovo] 
+                  ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_MultiplicadorNovo] END) 
+                     - (T0.[Stockprice])
+                ) 
+                                                     / (CASE WHEN  T0.Currency = 'R$' 
+                                                     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_MultiplicadorNovo] 
+                                                     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_MultiplicadorNovo]
+                                                     END) 
+      ELSE '999' END
+END)  
+
+
+) AS 'Margem',
+
+
+
+
+IIF (T1.DocDate <='31/10/2021',
+
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, 
+   ( (
+     CASE WHEN T0.Currency = 'R$' 
+     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_Multiplicador]) 
+     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_Multiplicador])      END 
+   ) * T0.[Quantity] ) 
+),
+
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, 
+   ( (
+     CASE WHEN T0.Currency = 'R$' 
+     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_MultiplicadorNovo]) 
+     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(INV1.[LineTotal]) From INV1 Where  INV1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_MultiplicadorNovo])      END 
+   ) * T0.[Quantity] ) 
+)
+
+) AS 'R$ Total NET', 
+
+
+
+T6.[FirmName] as 'Fabricante',
+T5.[ItmsGrpNam] AS 'Grupo do item',
+T3.[SlpName] as 'Vendedor', 
+T2.PymntGroup as 'Cond. Pagto',
+T9.[Name] as 'Estado Destino',
+T1.[agentcode] as 'Emissor da NF'
+
+
+FROM  [dbo].[INV1] T0  
+INNER  JOIN [dbo].[OINV] T1  ON  T1.[DocEntry] = T0.[DocEntry]  
+INNER  JOIN [dbo].[OCTG] T2  ON  T2.[GroupNum] = T1.[GroupNum] 
+INNER  JOIN [OCRD] T12  ON  T12.[CardCode] = T1.[CardCode]
+LEFT JOIN [OOND] T13 ON T13.[IndCode] = T12.[IndustryC]
+INNER JOIN [OSLP] T3 ON T3.SlpCode = T12.SlpCode
+INNER  JOIN [dbo].[OITM] T4 ON T4.[ITEMCODE] = T0.[ITEMCODE]
+INNER  JOIN [dbo].[OITB] T5 ON T5.[ItmsGrpCod] = T4.[ItmsGrpCod]
+INNER  JOIN [dbo].[OMRC] T6 ON T6.[FirmCode] = T4.[FirmCode]
+LEFT JOIN [dbo].[@MPOL_COD_IMP_MULTI] T7 ON T7.[Code] = T0.[Taxcode] 
+INNER JOIN [INV12] T8  ON  T8.[DocEntry] = T1.[DocEntry]  
+LEFT JOIN [OCST] T9 ON T8.[State] = T9.[Code]
+INNER JOIN [OUSG] T10 ON T0.[Usage] = T10.[ID]
+LEFT JOIN [INV3] T11 ON T1.[DocEntry] = T11.[DocEntry]
+
+
+Where
+T1.[CANCELED] = 'N' -- Apenas notas que não foram canceladas
+and SUBSTRING (T0.Taxcode,1,1) <> 'R' -- Notas de remessas emitidas na tela de NF de saída
+and T10.[ID] <> 60 -- Ref. venda de ativo imobilizado
+and T10.[ID] <> 16 -- Ref. NF complementar de ICMS
+and T1.[Serial] <> 5747 -- Ref. NF complementar de ICMS com a utilização de Venda normal
+
+
+UNION ALL
+
+
+----- DEVOLUÇÃO DE NOTA FISCAL DE SAÍDA
+
+SELECT  
+T0.[DocEntry], 
+(CASE WHEN T1.[BPLID] ='1' THEN 'MATRIZ' ELSE 'FILIAL' END) AS 'Matriz/Filial', 
+T0.[Whscode],
+T1.[Serial] AS 'DANFE',  
+T10.[usage] as 'Utilização',
+T1.[DocDate] AS 'Data Emissão',  
+T0.[BaseCard],
+T12.[CardName] AS 'Razão social', 
+T12.[CardFName] AS 'Cliente', 
+T13.[IndName] AS 'Nome do Segmento',
+T13.[IndDesc] AS 'Descrição do Segmento',
+T4.[SWW] as 'Família de Prod.',
+T4.[U_Segment_Code] as 'Segment Code',
+T0.itemcode, 
+T0.[SubCatNum] as 'Cód. Item Cliente', 
+T4.[ITEMNAME]  AS 'Descrição do item', 
+T0.[Quantity] * -1 AS 'Quantidade', 
+T0.[Currency] AS 'Moeda', 
+
+
+IIF (T1.DocDate <='31/10/2021',
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, (T0.[PriceBefDi]*T7.[U_Multiplicador]) * -1 ),
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, (T0.[PriceBefDi]*T7.[U_MultiplicadorNovo]) * -1 )
+)AS 'Preço NET', 
+
+
+CASE WHEN 
+( format((CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END), '#.') ) = 0 
+THEN ' ' 
+ELSE format(((CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100), 'P','pt-br') END  AS '% Desconto',
+
+
+
+IIF (T1.DocDate <='31/10/2021',
+
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, 
+( T0.[PriceBefDi]*T7.[U_Multiplicador] ) * ( 1- (  (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100  ) ) 
+* -1 ) ,
+
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, 
+( T0.[PriceBefDi]*T7.[U_MultiplicadorNovo] ) * ( 1- (  (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100  ) ) 
+* -1 ) 
+
+)AS 'Preço NET após desconto', 
+
+
+
+
+IIF (T1.DocDate <='31/10/2021',
+
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+FORMAT (T7.[U_Multiplicador], 'G', 'de-de'),
+
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+FORMAT (T7.[U_MultiplicadorNovo], 'G', 'de-de')
+
+) as 'Multiplicador',
+
+
+
+
+IIF (T10.[ID]  = 15, 0, 
+T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) 
+* -1) AS 'Preço c/ IMP - Ex-IPI', --- preço unitário considerando desconto
+
+
+IIF (T10.[ID]  = 15, FORMAT (0.00, 'G', 'de-de'), FORMAT (T0.[Rate], 'G', 'de-de') ) AS 'Taxa', --- Campo taxa da linha do item
+
+
+IIF (T10.[ID]  = 15, 0, 
+   CASE WHEN T0.Currency = 'R$' 
+   THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) * -1) 
+   ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) * -1) END 
+) as 'R$ Preço c/ IMP - Ex-IPI', --- Preço unitário em reais, considerando desconto.  
+
+
+IIF (T10.[ID]  = 15, 0, 
+   ( 
+      ( 
+         CASE WHEN T0.Currency = 'R$' 
+         THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) 
+         ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) END 
+      )  * T0.[Quantity] 
+   )  * -1 
+) AS 'R$ Total por Item - Ex-IPI',
+
+
+
+IIF (T10.[ID]  = 15, (T0.[VatSumSy] * -1 ), 
+   ( 
+      ( ( ( CASE WHEN T0.Currency = 'R$' 
+      THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) 
+      ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) END 
+   ) * T0.[Quantity] ) + T0.[VatSumSy] ) * -1 ) 
+) AS 'R$ Total por Item - Ex. frete',
+
+
+
+(
+(
+  ISNULL ((T11.[LineTotal] + T11.[VatSum]), 0.00) / 
+
+  ISNULL (( SELECT Sum(RIN1.[Quantity]) From RIN1 Where   RIN1.[DOCENTRY] = T0.[DOCENTRY] ) , 0.00)
+
+) * T0.[Quantity] 
+)* -1 as 'R$ Frete incluso na NF',
+
+
+( ( (T0.[PriceBefDi] * T0.[Rate]) * T0.[Quantity]) * ((CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100) * -1 ) as 'R$ Desconto',
+
+
+IIF (T10.[ID]  = 15, 0, T0.Stockprice ) as 'R$ Custo',
+
+
+
+
+
+
+-- Se na coluna "Margem" retornar 999, o código de imposto não foi incluído na tabela definida pelo usuario @MPOL_COD_IMP_MULTI para incluir ir em Ferramentas -> Janelas definidas pelo usuario -> MPOL_COD_IMP_MULTI
+
+IIF (T1.DocDate <= '31/10/2021',
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+
+(CASE WHEN ( T0.[Price] = 0) or (T10.[ID]  = 15) THEN 0 ELSE
+      CASE WHEN T0.[Taxcode] = T7.[Code] 
+      THEN (
+                  (CASE WHEN T0.Currency = 'R$' 
+                  THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) *T7.[U_Multiplicador] 
+                  ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_Multiplicador] END) 
+                     - (T0.[Stockprice])
+                ) 
+                                                     / (CASE WHEN  T0.Currency = 'R$' 
+                                                     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_Multiplicador] 
+                                                     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_Multiplicador]
+                                                     END) 
+      ELSE '999' END
+END)  ,
+
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+(CASE WHEN ( T0.[Price] = 0) or (T10.[ID]  = 15) THEN 0 ELSE
+      CASE WHEN T0.[Taxcode] = T7.[Code] 
+      THEN (
+                  (CASE WHEN T0.Currency = 'R$' 
+                  THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) *T7.[U_MultiplicadorNovo] 
+                  ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_MultiplicadorNovo] END) 
+                     - (T0.[Stockprice])
+                ) 
+                                                     / (CASE WHEN  T0.Currency = 'R$' 
+                                                     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_MultiplicadorNovo] 
+                                                     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) ) * T7.[U_MultiplicadorNovo]
+                                                     END) 
+      ELSE '999' END
+END)  
+
+) AS 'Margem',
+
+
+
+
+IIF (T1.DocDate <= '31/10/2021',
+
+     --Caso a data do documento seja anterior ou igual a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, 
+   ( ( (
+     CASE WHEN T0.Currency = 'R$' 
+     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_Multiplicador]) 
+     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_Multiplicador])      END 
+   ) * T0.[Quantity] ) * -1)
+) ,
+
+     --Caso contrário, ou seja, a data do documento seja posterior a 31 de outubro de 2021
+IIF (T10.[ID]  = 15, 0, 
+   ( ( (
+     CASE WHEN T0.Currency = 'R$' 
+     THEN ( T0.[PriceBefDi] * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_MultiplicadorNovo]) 
+     ELSE ( (T0.[PriceBefDi]*T0.[Rate]) * ( 1- ( (CASE WHEN (ISNULL(T1.[DiscSum], 0.00)) <> 0.00 then (T1.[DiscSum] / (SELECT Sum(RIN1.[LineTotal]) From RIN1 Where  RIN1.[DOCENTRY] = T0.[DOCENTRY] ) * 100 ) ELSE (ISNULL(T0.[DiscPrcnt], 0.00)) END)/100 ) ) *T7.[U_MultiplicadorNovo])      END 
+   ) * T0.[Quantity] ) * -1)
+)
+
+) AS 'R$ Total NET',
+
+
+
+T6.[FirmName] as 'Fabricante',
+T5.[ItmsGrpNam] AS 'Grupo do item',
+T3.[SlpName] as 'Vendedor', 
+T2.PymntGroup as 'Cond. Pagto',
+T9.[Name] as 'Estado Destino',
+T1.[agentcode] as 'Emissor da NF'
+
+
+FROM  [dbo].[RIN1] T0  
+INNER  JOIN [dbo].[ORIN] T1  ON  T1.[DocEntry] = T0.[DocEntry]  
+INNER  JOIN [dbo].[OCTG] T2  ON  T2.[GroupNum] = T1.[GroupNum] 
+INNER  JOIN [OCRD] T12  ON  T12.[CardCode] = T1.[CardCode]
+LEFT JOIN [OOND] T13 ON T13.[IndCode] = T12.[IndustryC]
+INNER JOIN [OSLP] T3 ON T3.SlpCode = T12.SlpCode
+INNER  JOIN [dbo].[OITM] T4 ON T4.[ITEMCODE] = T0.[ITEMCODE]
+INNER  JOIN [dbo].[OITB] T5 ON T5.[ItmsGrpCod] = T4.[ItmsGrpCod]
+INNER  JOIN [dbo].[OMRC] T6 ON T6.[FirmCode] = T4.[FirmCode]
+LEFT JOIN [dbo].[@MPOL_COD_IMP_MULTI] T7 ON T7.[Code] = T0.[Taxcode] 
+INNER JOIN [RIN12] T8  ON  T8.[DocEntry] = T1.[DocEntry]  
+LEFT JOIN [OCST] T9 ON T8.[State] = T9.[Code]
+INNER JOIN [OUSG] T10 ON T0.[Usage] = T10.[ID]
+LEFT JOIN [INV3] T11 ON T1.[DocEntry] = T11.[DocEntry]
+
+Where
+T1.[CANCELED] = 'N' -- Apenas devoluções que não foram canceladas
+and SUBSTRING (T0.Taxcode,1,1) <> 'R' -- Notas de remessas emitidas na tela de NF de saída
+and T0.[BaseType] <> 203 -- Não puxar dev. de Nota fiscal de saída ref. a cancelamento de adiantamento de clientes
+and T10.[ID] <> 60 -- Ref. venda de ativo imobilizado
+and T10.[ID] <> 16 -- Ref. NF complementar de ICMS
+
+
+
+ORDER BY
+T1.[DocDate] desc,
+ T1.[Serial] desc
